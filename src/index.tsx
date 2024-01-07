@@ -1,28 +1,14 @@
-import React, { useState } from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
+import { World } from "./World.tsx";
 import reportWebVitals from './reportWebVitals.ts';
-
-// function renderWorld() {
-//     const [count, setCount] = useState(0);
-//     console.log('Hello World');
-//     return (
-//         <>
-//             <h1>{count}</h1>
-//             <button onClick={() => setCount(count + 1)}>
-//             Increment
-//             </button>
-//         </>
-//     );
-// }
-
 
 const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
 );
 root.render(
     <React.StrictMode>
-        <App />
+        <World />
     </React.StrictMode>
 );
 
