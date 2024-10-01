@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { World } from "./World.tsx";
+import { World } from "./components/world/World.tsx";
+import { LifeSim } from "./components/life_sim/LifeSim.tsx";
 import reportWebVitals from './reportWebVitals.ts';
 
 const root = ReactDOM.createRoot(
@@ -8,7 +9,8 @@ const root = ReactDOM.createRoot(
 );
 root.render(
     <React.StrictMode>
-        <World />
+        {/* <World /> */}
+        <LifeSim />
     </React.StrictMode>
 );
 
