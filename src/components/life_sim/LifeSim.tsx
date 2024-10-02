@@ -34,7 +34,7 @@ export const LifeSim = () => {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(8);
+        setNumOfParticleGroups(50);
     }, []);
 
     const randomiseHexColors = (numOfColors: number): string[] => {
