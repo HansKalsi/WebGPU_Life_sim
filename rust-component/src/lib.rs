@@ -1,6 +1,7 @@
 use std::vec;
 use std::time::Instant;
 use rayon::prelude::*;
+use std::collections::HashMap;
 
 // use wasm_bindgen::prelude::*;
 
@@ -9,56 +10,63 @@ const HEIGHT: f32 = 1000.0;
 
 // #[wasm_bindgen]
 pub fn trigger_particle_rules(encoded_rules: &String, encoded_particles: &String) -> String {
-    let mut temp_updated_encoded_particles: Vec<String> = vec![];
     let particles_arr: Vec<&str> = encoded_particles.split("~").collect();
-    // Loops through all rule objects
+    let num_particles = particles_arr.len();
+
+    // Parse rules and group them by target particle group (r_id_one)
+    let mut rules_by_particle_group: HashMap<usize, Vec<(usize, f32)>> = HashMap::new();
+
     for rule in encoded_rules.split(",") {
-        // Represents a decoded rule object { particle_one_id, particle_two_id, gravity_force }
-        let proxy: Vec<f32> = rule.split(":")
-                        .filter_map(|s| s.parse::<f32>().ok())
-                        .collect();
-        if proxy.len() < 2 {
+        let proxy: Vec<f32> = rule
+            .split(":")
+            .filter_map(|s| s.parse::<f32>().ok())
+            .collect();
+        if proxy.len() < 3 {
             continue;
         }
-        let r_id_one: usize = proxy[0] as usize;
-        let r_id_two: usize = proxy[1] as usize;
-        if r_id_one >= particles_arr.len() || r_id_two >= particles_arr.len() {
-            continue;
-        }
-        let mut p_one: &str = particles_arr[r_id_one];
-        let mut p_two: &str = particles_arr[r_id_two];
-        // If we have a r_id_one or r_id_two in the temp_updated_encoded_particles vector, we should use that encoded object instead of the original in particles_arr
-        if (r_id_one) < temp_updated_encoded_particles.len() {
-            p_one = &temp_updated_encoded_particles[r_id_one];
-        }
-        if (r_id_two) < temp_updated_encoded_particles.len() {
-            p_two = &temp_updated_encoded_particles[r_id_two];
-        }
-        let rule_now = Instant::now();
-        let rule_result = trigger_rule(
-            p_one,
-            p_two,
-            proxy[2] as f32
-        );
-        let rule_elapsed = rule_now.elapsed();
-        println!("Elapsed for rule iteration: {:.2?}", rule_elapsed);
-        // Keep log of updated particle group for future usage if same particle group is needed again (so we can apply future rules to the updated version)
-        if temp_updated_encoded_particles.len() as f32 == r_id_one as f32 {
-            temp_updated_encoded_particles.push(rule_result);
-        } else {
-            temp_updated_encoded_particles[r_id_one] = rule_result;
-        }
+        let r_id_one = proxy[0] as usize;
+        let r_id_two = proxy[1] as usize;
+        let gravity_force = proxy[2];
+        rules_by_particle_group
+            .entry(r_id_one)
+            .or_insert_with(Vec::new)
+            .push((r_id_two, gravity_force));
     }
-    return temp_updated_encoded_particles.join("~");
+
+    // Process particle groups in parallel
+    let updated_particle_groups: Vec<String> = particles_arr
+        .par_iter()
+        .enumerate()
+        .map(|(idx, &p_one)| {
+            // Check if there are any rules for this particle group
+            if let Some(rules) = rules_by_particle_group.get(&idx) {
+                let mut updated_p_one = p_one.to_string();
+
+                // Process all rules for this particle
+                for &(r_id_two, gravity_force) in rules {
+                    if r_id_two >= num_particles {
+                        continue;
+                    }
+                    let p_two = particles_arr[r_id_two];
+                    if let Some(new_p_one) = trigger_rule(&updated_p_one, p_two, gravity_force) {
+                        updated_p_one = new_p_one;
+                    }
+                }
+                updated_p_one
+            } else {
+                // No updates, return the original particle group
+                p_one.to_string()
+            }
+        })
+        .collect();
+
+    return updated_particle_groups.join("~");
 }
 
-fn trigger_rule(particles_one: &str, particles_two: &str, g: f32) -> String {
-    let setup_now = Instant::now();
+fn trigger_rule(particles_one: &str, particles_two: &str, g: f32) -> Option<String> {
     let p_one: Vec<&str> = particles_one.split(",").collect();
     let p_two: Vec<&str> = particles_two.split(",").collect();
     let mut new_p_one: Vec<String> = vec![];
-    let setup_elapsed = setup_now.elapsed();
-    println!("Elapsed for rule setup: {:.2?}", setup_elapsed);
     
     new_p_one.par_extend(p_one.par_iter().map(|p1| {
         let a: Vec<&str> = p1.split(":").collect();
@@ -68,7 +76,7 @@ fn trigger_rule(particles_one: &str, particles_two: &str, g: f32) -> String {
         let mut ax: f32 = a[0].parse().unwrap();
         let mut ay: f32 = a[1].parse().unwrap();
 
-        let comparison_now = Instant::now();
+        // let comparison_now = Instant::now();
         let (fx, fy) = p_two.par_iter()
             .map(|p2| {
                 let b: Vec<&str> = p2.split(":").collect();
@@ -89,8 +97,8 @@ fn trigger_rule(particles_one: &str, particles_two: &str, g: f32) -> String {
                 }
             })
             .reduce(|| (0.0, 0.0), |(fx1, fy1), (fx2, fy2)| (fx1 + fx2, fy1 + fy2));
-        let comparison_elapsed = comparison_now.elapsed();
-        println!("Elapsed for rule comparison: {:.2?}", comparison_elapsed);
+        // let comparison_elapsed = comparison_now.elapsed();
+        // println!("Elapsed for rule comparison: {:.2?}", comparison_elapsed);
 
         let mut avx: f32 = (a[2].parse::<f32>().unwrap() + fx) * 0.5; // a.vx = (a.vx + fx) * 0.5
         let mut avy: f32 = (a[3].parse::<f32>().unwrap() + fy) * 0.5; // a.vy = (a.vy + fy) * 0.5
@@ -107,5 +115,5 @@ fn trigger_rule(particles_one: &str, particles_two: &str, g: f32) -> String {
         // 51.01773 : 361.34738 : 0.97994196 : 0.5047621 : #0CC662
         format!("{:.2}:{:.2}:{:.2}:{:.2}:{}", ax, ay, avx, avy, colour)
     }));
-    return new_p_one.join(",");
+    return Some(new_p_one.join(","));
 }
