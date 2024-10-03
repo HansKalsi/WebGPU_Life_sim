@@ -35,7 +35,7 @@ export const LifeSim = () => {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(5);
+        setNumOfParticleGroups(8);
     }, []);
 
     const randomiseHexColors = (numOfColors: number): string[] => {
@@ -115,18 +115,17 @@ export const LifeSim = () => {
         m.fillRect(x,y,s,s);
     }
 
-    async function update() {
-        // TODO: update should be a fetch and all it's logic should be in the rust backend
-        // triggerRules();
-        const response = await triggerRulesAPI();
+    async function update(particleGroups: any = particlesProxy) {
+        const ENCODED_RULES = encodeEntity(rulesProxy, "rules");
+        const ENCODED_PARTICLES = encodeEntity(particleGroups, "particles");
+
+        const response = await triggerRulesAPI(ENCODED_PARTICLES, ENCODED_RULES);
         console.log("response", response);
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        // console.log("response as text", response.text());
-        // console.log("response as json", response.json());
         const DATA = await response.text();
 
         const DECODED_PARTICLES = decodeEntity(DATA, "particles");
@@ -143,18 +142,12 @@ export const LifeSim = () => {
                 draw(p.x,p.y,p.color,3);
             }
         }
-        setParticlesProxy(DECODED_PARTICLES);
         // Queue next frame
-        requestAnimationFrame(update);
+        requestAnimationFrame(() => update(DECODED_PARTICLES));
     }
 
     // API call to backend to run rules more efficiently with rust
-    async function triggerRulesAPI() {
-        const ENCODED_RULES = encodeEntity(rulesProxy, "rules");
-        // console.log(ENCODED_RULES);
-        const ENCODED_PARTICLES = encodeEntity(particlesProxy, "particles");
-        // console.log(ENCODED_PARTICLES);
-
+    async function triggerRulesAPI(ENCODED_PARTICLES: string, ENCODED_RULES: string) {
         return await fetch('http://127.0.0.1:8080/rules', {
             method: 'POST',
             headers: {
@@ -211,10 +204,7 @@ export const LifeSim = () => {
 
         // else it's particles
         let decoded = [];
-        // // remove trailing ~
-        // entity = entity.slice(0, -1);
         let groups = entity.split("~");
-        console.log("groups", groups);
         for (let i = 0; i < groups.length; i++) {
             let group = groups[i].split(",");
             let particle_group = [];
@@ -229,7 +219,6 @@ export const LifeSim = () => {
                 });
             }
             decoded.push(particle_group);
-            // console.log("pushed to decoded", decoded);
         }
         return decoded;
     }

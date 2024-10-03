@@ -3,6 +3,7 @@ use actix_web::{web, App, HttpServer, Responder};
 mod lib;
 use lib::trigger_particle_rules;
 use serde::Deserialize;
+use std::time::Instant;
 
 #[derive(Deserialize)]
 struct RulesCall {
@@ -11,7 +12,10 @@ struct RulesCall {
 }
 
 async fn rules_api(req_body: web::Json<RulesCall>) -> impl Responder {
+    let now = Instant::now();
     let updated_particles = trigger_particle_rules(&req_body.rules.to_string(), &req_body.particles.to_string());
+    let elapsed = now.elapsed();
+    println!("Elapsed for entire iteration: {:.2?}", elapsed);
     format!("{}", updated_particles)
 }
 
