@@ -9,6 +9,7 @@ export const LifeSim = () => {
 
     // Setup Variables
     const [numOfParticleGroups, setNumOfParticleGroups] = useState<number>(0);
+    const [particlesInitialised, setParticlesInitialised] = useState<boolean>(false);
 
     // Modularised variables
     const [particlesProxy, setParticlesProxy] = useState<any>([]);
@@ -34,7 +35,7 @@ export const LifeSim = () => {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(50);
+        setNumOfParticleGroups(5);
     }, []);
 
     const randomiseHexColors = (numOfColors: number): string[] => {
@@ -66,6 +67,7 @@ export const LifeSim = () => {
             }
             console.log("particleGroups", particleGroups);
             setParticlesProxy(particleGroups);
+            setParticlesInitialised(true);
         }
     }, [numOfParticleGroups]);
 
@@ -84,11 +86,11 @@ export const LifeSim = () => {
     }, [m])
 
     useEffect(() => {
-        if (particlesProxy.length > 0) {
+        if (particlesInitialised) {
             console.log("started simulation");
             update();
         }
-    }, [particlesProxy]);
+    }, [particlesInitialised]);
 
     const particle = (x:any, y:any, c:any) => {
         return {"x":x,"y":y, "vx":0, "vy":0, "color":c};
@@ -106,61 +108,130 @@ export const LifeSim = () => {
         return group;
     }
 
+    // FIXME: Currently used for each particle draw aswell,
+    //       should likely be handled with a batch-esc operation when the api call response is received 
     const draw = (x:any,y:any,c:any,s:any) => {
         m.fillStyle = c;
         m.fillRect(x,y,s,s);
     }
 
-    const rule = (particles1:any, particles2:any, g:any) => {
-        for (let i = 0; i < particles1.length; i++) {
-            let fx = 0;
-            let fy = 0;
-            let a:any, b:any;
-            for (let j = 0; j < particles2.length; j++) {
-                a = particles1[i];
-                b = particles2[j];
-                let dx = a.x-b.x;
-                let dy = a.y-b.y;
-                let d = Math.sqrt(dx*dx+dy*dy);
-                if (d > 0 && d < 80) {
-                    let F = g * 1/d;
-                    fx += (F*dx);
-                    fy += (F*dy);
-                }
-            }
-            a.vx = (a.vx+fx)*0.5;
-            a.vy = (a.vy+fy)*0.5;
-            a.x += a.vx;
-            a.y += a.vy;
-            if (a.x <= 0 || a.x >= width) {
-                a.vx *= -1;
-            }
-            if (a.y <= 0 || a.y >= height) {
-                a.vy *= -1;
-            }
+    async function update() {
+        // TODO: update should be a fetch and all it's logic should be in the rust backend
+        // triggerRules();
+        const response = await triggerRulesAPI();
+        console.log("response", response);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    }
 
-    const update = () => {
-        triggerRules();
-        m.clearRect(0,0,width,height);
-        draw(0,0,"black", width);
-        for (let i = 0; i < particlesProxy.length; i++) {
-            let proxy = particlesProxy[i];
+        // console.log("response as text", response.text());
+        // console.log("response as json", response.json());
+        const DATA = await response.text();
 
-            for (let i = 0; i < proxy.length; i++) {
-                let p = proxy[i];
+        const DECODED_PARTICLES = decodeEntity(DATA, "particles");
+        console.log(DECODED_PARTICLES);
+        // Clear canvas
+        m.clearRect(0,0,width,height); // KEEP and use when response is received
+        draw(0,0,"black", width); // KEEP and use when response is received
+        // Render updated particles
+        for (let i = 0; i < DECODED_PARTICLES.length; i++) {
+            let proxy = DECODED_PARTICLES[i];
+
+            for (let j = 0; j < proxy.length; j++) {
+                let p = proxy[j];
                 draw(p.x,p.y,p.color,3);
             }
         }
+        setParticlesProxy(DECODED_PARTICLES);
+        // Queue next frame
         requestAnimationFrame(update);
     }
 
-    const triggerRules = () => {
-        for (let i = 0; i < rulesProxy.length; i++) {
-            let proxy = rulesProxy[i];
-            rule(particlesProxy[proxy[0]], particlesProxy[proxy[1]], proxy[2]);
+    // API call to backend to run rules more efficiently with rust
+    async function triggerRulesAPI() {
+        const ENCODED_RULES = encodeEntity(rulesProxy, "rules");
+        // console.log(ENCODED_RULES);
+        const ENCODED_PARTICLES = encodeEntity(particlesProxy, "particles");
+        // console.log(ENCODED_PARTICLES);
+
+        return await fetch('http://127.0.0.1:8080/rules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ rules: ENCODED_RULES, particles: ENCODED_PARTICLES })
+        })
+    }
+
+    function encodeEntity(entity: any, tag: string): string {
+        if (!entity) {
+            return "";
         }
+
+        if (tag === "rules") {
+            let encoded = "";
+            for (let i = 0; i < entity.length; i++) {
+                let rule = entity[i];
+                encoded += rule[0] + ":" + rule[1] + ":" + rule[2] + ",";
+            }
+            encoded.slice(0, -1); // Remove trailing comma
+            return encoded;
+        }
+        
+        // else it's particles
+        let encoded = "";
+        for (let i = 0; i < entity.length; i++) {
+            let group = entity[i];
+            for (let j = 0; j < group.length; j++) {
+                let particle_obj = group[j];
+                encoded += particle_obj.x + ":" + particle_obj.y + ":" + particle_obj.vx + ":" + particle_obj.vy + ":" + particle_obj.color + ",";
+            }
+            encoded.slice(0, -1); // Remove trailing comma
+            encoded += "~";
+        }
+        encoded.slice(0, -1); // Remove trailing comma
+        return encoded;
+    }
+
+    function decodeEntity(entity: string, tag: string): any {
+        if (!entity) {
+            return [];
+        }
+
+        if (tag === "rules") {
+            let decoded = [];
+            let rules = entity.split(",");
+            for (let i = 0; i < rules.length; i++) {
+                let rule = rules[i].split(":");
+                decoded.push([rule[0], rule[1], rule[2]]); // [particleGroupOne, particleGroupTwo, gravity]
+            }
+            return decoded;
+        }
+
+        // else it's particles
+        let decoded = [];
+        // // remove trailing ~
+        // entity = entity.slice(0, -1);
+        let groups = entity.split("~");
+        console.log("groups", groups);
+        for (let i = 0; i < groups.length; i++) {
+            let group = groups[i].split(",");
+            let particle_group = [];
+            for (let j = 0; j < group.length; j++) {
+                let particle = group[j].split(":");
+                particle_group.push({
+                    x: parseInt(particle[0]),
+                    y: parseInt(particle[1]),
+                    vx: parseInt(particle[2]),
+                    vy: parseInt(particle[3]),
+                    color: particle[4]
+                });
+            }
+            decoded.push(particle_group);
+            // console.log("pushed to decoded", decoded);
+        }
+        return decoded;
     }
 
     return (

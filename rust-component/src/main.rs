@@ -1,17 +1,18 @@
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer, Responder};
 mod lib;
-use lib::greet;
+use lib::trigger_particle_rules;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-struct GreetRequest {
-    message: String,
+struct RulesCall {
+    rules: String,
+    particles: String,
 }
 
-async fn greet_api(req_body: web::Json<GreetRequest>) -> impl Responder {
-    let greeting = greet(&req_body.message);
-    format!("{}", greeting)
+async fn rules_api(req_body: web::Json<RulesCall>) -> impl Responder {
+    let updated_particles = trigger_particle_rules(&req_body.rules.to_string(), &req_body.particles.to_string());
+    format!("{}", updated_particles)
 }
 
 #[actix_web::main]
@@ -25,7 +26,7 @@ async fn main() -> std::io::Result<()> {
                     .allow_any_header()
             )
             // .route("/greet", web::get().to(greet_api))
-            .route("/greet", web::post().to(greet_api))
+            .route("/rules", web::post().to(rules_api))
     })
     .bind("127.0.0.1:8080")?
     .run()
