@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-export const LifeSim = () => {
+export function LifeSim() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [name, setName] = useState("life");
     const [width, setWidth] = useState(1000);
@@ -14,7 +14,7 @@ export const LifeSim = () => {
     const [particlesProxy, setParticlesProxy] = useState<any>([]);
     const [rulesProxy, setRulesProxy] = useState<any>([]);
 
-    const randomiseRules = () => {
+    function randomiseRules() {
         let rules = [];
         // Iterate over each particle group and then iterate over each particle group again to get every possible rule pair
         for (let i = 0; i < numOfParticleGroups; i++) {
@@ -37,7 +37,7 @@ export const LifeSim = () => {
         setNumOfParticleGroups(10);
     }, []);
 
-    const randomiseHexColors = (numOfColors: number): string[] => {
+    function randomiseHexColors(numOfColors: number): string[] {
         const colors: string[] = [];
         const hexChars = "0123456789ABCDEF";
 
@@ -99,7 +99,7 @@ export const LifeSim = () => {
         return Math.random()*size;
     }
     
-    const create = (number:any, color:any) => {
+    function create(number:any, color:any) {
         let group = [];
         for (let i = 0; i < number; i++) {
             group.push(particle(randomPos(width), randomPos(height), color));
@@ -107,12 +107,12 @@ export const LifeSim = () => {
         return group;
     }
 
-    const draw = (x:any,y:any,c:any,s:any) => {
+    function draw(x:any,y:any,c:any,s:any) {
         m.fillStyle = c;
         m.fillRect(x,y,s,s);
     }
 
-    const rule = (particles1:any, particles2:any, g:any) => {
+    function rule(particles1:any, particles2:any, g:any) {
         for (let i = 0; i < particles1.length; i++) {
             let fx = 0;
             let fy = 0;
@@ -144,7 +144,7 @@ export const LifeSim = () => {
         }
     }
 
-    const update = () => {
+    function update() {
         triggerRules();
         m.clearRect(0,0,width,height);
         draw(0,0,"black", width);
@@ -159,7 +159,7 @@ export const LifeSim = () => {
         requestAnimationFrame(update);
     }
 
-    const triggerRules = () => {
+    function triggerRules() {
         for (let i = 0; i < rulesProxy.length; i++) {
             let proxy = rulesProxy[i];
             rule(particlesProxy[proxy[0]], particlesProxy[proxy[1]], proxy[2]);
