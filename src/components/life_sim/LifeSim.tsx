@@ -34,7 +34,7 @@ export function LifeSim() {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(10);
+        setNumOfParticleGroups(25);
     }, []);
 
     function randomiseHexColors(numOfColors: number): string[] {
@@ -60,7 +60,8 @@ export function LifeSim() {
             console.log("colours", colors);
             let particleGroups = [];
             for (let i = 0; i < colors.length; i++) {
-                let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
+                // let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
+                let temp_numOfParticles = 500; // Generate a random number between 0 and 200
                 let temp_particleGroup = create(temp_numOfParticles, colors[i]);
                 particleGroups.push(temp_particleGroup);
             }
