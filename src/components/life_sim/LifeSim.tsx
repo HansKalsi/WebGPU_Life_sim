@@ -34,7 +34,7 @@ export const LifeSim = () => {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(50);
+        setNumOfParticleGroups(10);
     }, []);
 
     const randomiseHexColors = (numOfColors: number): string[] => {
@@ -65,6 +65,7 @@ export const LifeSim = () => {
                 particleGroups.push(temp_particleGroup);
             }
             console.log("particleGroups", particleGroups);
+            console.log("total number of particles:", particleGroups.reduce((acc, group) => acc + group.length, 0));
             setParticlesProxy(particleGroups);
         }
     }, [numOfParticleGroups]);
@@ -90,18 +91,18 @@ export const LifeSim = () => {
         }
     }, [particlesProxy]);
 
-    const particle = (x:any, y:any, c:any) => {
+    function particle(x:any, y:any, c:any) {
         return {"x":x,"y":y, "vx":0, "vy":0, "color":c};
     }
     
-    const random = () => {
-        return Math.random()*((width+height)/2);
+    function randomPos(size: number) {
+        return Math.random()*size;
     }
     
     const create = (number:any, color:any) => {
         let group = [];
         for (let i = 0; i < number; i++) {
-            group.push(particle(random(),random(),color));
+            group.push(particle(randomPos(width), randomPos(height), color));
         }
         return group;
     }
@@ -115,9 +116,9 @@ export const LifeSim = () => {
         for (let i = 0; i < particles1.length; i++) {
             let fx = 0;
             let fy = 0;
-            let a:any, b:any;
+            let a:any = particles1[i];
+            let b:any;
             for (let j = 0; j < particles2.length; j++) {
-                a = particles1[i];
                 b = particles2[j];
                 let dx = a.x-b.x;
                 let dy = a.y-b.y;
@@ -128,16 +129,18 @@ export const LifeSim = () => {
                     fy += (F*dy);
                 }
             }
-            a.vx = (a.vx+fx)*0.5;
-            a.vy = (a.vy+fy)*0.5;
-            a.x += a.vx;
-            a.y += a.vy;
-            if (a.x <= 0 || a.x >= width) {
+            a.vx = (a.vx+fx)*0.2;
+            a.vy = (a.vy+fy)*0.2;
+            // If the particle would go off screen, make it's force change negative
+            if ((a.x + a.vx) <= 0 || (a.x + a.vx) >= width) {
                 a.vx *= -1;
             }
-            if (a.y <= 0 || a.y >= height) {
+            if ((a.y + a.vy) <= 0 || (a.y + a.vy) >= height) {
                 a.vy *= -1;
             }
+            // Apply the force change to the particles position
+            a.x += a.vx;
+            a.y += a.vy;
         }
     }
 
