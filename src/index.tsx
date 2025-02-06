@@ -12,8 +12,8 @@ const root = ReactDOM.createRoot(
 );
 root.render(
     <React.StrictMode>
-        {/* <LifeSim /> */}
-        <WorkerTest />
+        <LifeSim />
+        {/* <WorkerTest /> */}
     </React.StrictMode>
 );
 
