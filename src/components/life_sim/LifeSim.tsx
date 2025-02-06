@@ -14,6 +14,9 @@ export function LifeSim() {
     const [particlesProxy, setParticlesProxy] = useState<any>([]);
     const [rulesProxy, setRulesProxy] = useState<any>([]);
 
+    // testing
+    // const [workers, setWorkers] = useState<any>([]);
+
     function randomiseRules() {
         let rules = [];
         // Iterate over each particle group and then iterate over each particle group again to get every possible rule pair
@@ -68,6 +71,29 @@ export function LifeSim() {
             console.log("particleGroups", particleGroups);
             console.log("total number of particles:", particleGroups.reduce((acc, group) => acc + group.length, 0));
             setParticlesProxy(particleGroups);
+
+            const results: any = [];
+            const WORKER_COUNT = navigator.hardwareConcurrency || 4;
+            console.log(WORKER_COUNT);
+            console.log(navigator.hardwareConcurrency);
+            const workers: Worker[] = [];
+
+            for (let i = 0; i < WORKER_COUNT; i++) {
+                workers.push(new Worker('worker.ts'));
+            }
+
+            console.log("workers", workers);
+
+            for (let i = 0; i < WORKER_COUNT; i++) {
+                const worker = workers[i];
+                worker.postMessage(i);
+
+                // worker.onmessage = (e) => {
+                //     results.push(e);
+                // }
+            }
+
+            console.log("results", results);
         }
     }, [numOfParticleGroups]);
 

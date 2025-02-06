@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 // import { World } from "./components/world/World.tsx";
 import { LifeSim } from "./components/life_sim/LifeSim.tsx";
 import reportWebVitals from './reportWebVitals.ts';
+import { WorkerTest } from "./components/life_sim/WorkerTest.tsx";
 
 // import init, { greet } from "./pkg/rust_component.js";
 
@@ -11,7 +12,8 @@ const root = ReactDOM.createRoot(
 );
 root.render(
     <React.StrictMode>
-        <LifeSim />
+        {/* <LifeSim /> */}
+        <WorkerTest />
     </React.StrictMode>
 );
 
