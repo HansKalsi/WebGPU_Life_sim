@@ -1,4 +1,3 @@
-import { MutableRefObject } from "react";
 import { rule } from "../LifeSim.tsx";
 
 export function workerFunction(this: DedicatedWorkerGlobalScope) {
@@ -9,17 +8,12 @@ export function workerFunction(this: DedicatedWorkerGlobalScope) {
 }
 
 export function setupWorker(worker: Worker, completeFunction?: Function) {
-    // const test = "own stuff";
-
     worker.onmessage = (event) => {
-        // console.log("worker do something with:", event.data);
         if (event.data?.action === "triggerRule") {
             const { pId, width, height, particles1, particles2, g } = event.data;
-            // console.log(pId, width, height, particles1, particles2, g);
             if (completeFunction) {
                 completeFunction(rule(pId, width, height, particles1.group, particles2.group, g));
             }
-            // respondTo.current.push(rule(pId, width, height, particles1.group, particles2.group, g));
         }
 
         if (event.data?.action === "triggerRules") {
