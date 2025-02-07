@@ -10,6 +10,12 @@ import { WorkerTest } from "./components/life_sim/WorkerTest.tsx";
 const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
 );
+document.querySelector('body')!.style.backgroundColor = "black";
+document.querySelector('body')!.style.display = "flex";
+document.querySelector('body')!.style.height = "100vh";
+document.querySelector('body')!.style.justifyContent = "center";
+document.querySelector('body')!.style.alignItems = "center";
+document.getElementById('root')!.style.border = "1px solid white";
 root.render(
     <React.StrictMode>
         <LifeSim />
