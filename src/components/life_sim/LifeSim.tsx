@@ -33,13 +33,16 @@ export function LifeSim() {
     const [height, setHeight] = useState(1000);
     const [m, setM] = useState<any>(null);
 
-    // Setup Variables
+    // Setup variables
     const [numOfParticleGroups, setNumOfParticleGroups] = useState<number>(0);
 
     // Modularised variables
     const particlesProxy = useRef<ParticleGroup[]>([]);
     const rulesProxy = useRef<Rule[]>([]);
     const workers = useRef<WorkerParticleGroup[]>([]);
+
+    // Tracker variables
+    const workerCompleteCount = useRef<number>(0);
 
     function randomiseRules(): Rule[] {
         let rules: Rule[] = [];
@@ -62,7 +65,7 @@ export function LifeSim() {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(8); // only use multiples of 4 since they are being split evenly amongst 4 workers - FIXME: make this not a requirement
+        setNumOfParticleGroups(16); // only use multiples of 4 since they are being split evenly amongst 4 workers - FIXME: make this not a requirement
     }, []);
 
     function randomiseHexColors(numOfColors: number): string[] {
@@ -84,31 +87,37 @@ export function LifeSim() {
 
     useEffect(() => {
         if (numOfParticleGroups) {
-            rulesProxy.current = randomiseRules();
-            const colors = randomiseHexColors(numOfParticleGroups);
-            console.log("colours", colors);
-            let particleGroups: ParticleGroup[] = [];
-            for (let i = 0; i < colors.length; i++) {
-                // TODO: Make random again (only fixed for testing consistently)
-                // let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
-                let temp_numOfParticles = 500; // Generate a random number between 0 and 200
-                let temp_particleGroup: ParticleGroup = create(temp_numOfParticles, colors[i]);
-                particleGroups.push(temp_particleGroup);
-            }
-            console.log("particleGroups", particleGroups);
-            console.log("total number of particles:", particleGroups.reduce((acc, group) => acc + group.particles!.length, 0));
-            particlesProxy.current = particleGroups;
-            // Start simulation
-            console.log("started simulation", particlesProxy.current);
-            update();
-
-            setupWorkers();
+            startSimulation();
         }
     }, [numOfParticleGroups]);
 
+    function startSimulation() {
+        // Setup rules
+        rulesProxy.current = randomiseRules();
+        // Setup particle groups
+        const colors = randomiseHexColors(numOfParticleGroups);
+        console.log("colours", colors);
+        let particleGroups: ParticleGroup[] = [];
+        for (let i = 0; i < colors.length; i++) {
+            // TODO: Make random again (only fixed for testing consistently)
+            // let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
+            let temp_numOfParticles = 500; // Generate a random number between 0 and 200
+            let temp_particleGroup: ParticleGroup = create(temp_numOfParticles, colors[i]);
+            particleGroups.push(temp_particleGroup);
+        }
+        console.log("particleGroups", particleGroups);
+        console.log("total number of particles:", particleGroups.reduce((acc, group) => acc + group.particles!.length, 0));
+        particlesProxy.current = particleGroups;
+        // Setup workers
+        setupWorkers();
+        // Start simulation
+        console.log("started simulation", particlesProxy.current);
+        drawFrame();
+    }
+
     function setupWorkers() {
         // const WORKER_COUNT = navigator.hardwareConcurrency || 4;
-        const WORKER_COUNT = 4;
+        const WORKER_COUNT = 8;
         console.log(`starting ${WORKER_COUNT} workers`);
         console.log(`could start a maximum of ${navigator.hardwareConcurrency} workers`);
         let tempWorkers: WorkerParticleGroup[] = [];
@@ -182,8 +191,7 @@ export function LifeSim() {
         m.fillRect(x,y,s,s);
     }
 
-    function update() {
-        triggerRules();
+    function drawFrame() {
         // Reset canvas (so old data is removed and colour bleeding doesn't happen)
         m.clearRect(0,0,width,height);
         // TODO: worker-ise
@@ -196,7 +204,12 @@ export function LifeSim() {
                 draw(particle.x, particle.y, particle.color, 3);
             }
         }
-        requestAnimationFrame(update);
+        // Kick off the next frame
+        update();
+    }
+
+    function update() {
+        triggerRules();
     }
 
     function triggerRules() {
@@ -214,11 +227,15 @@ export function LifeSim() {
 
     function workerComplete(data: any) {
         // TODO: Somehow when the worker finishes, detect which particle groups it updated and replace the data with the new data
-
         if (particlesProxy.current.length > 0) {
             for (const updateData of data) {
                 particlesProxy.current[updateData.id].particles = updateData.new_particles.particles;
             }
+        }
+        workerCompleteCount.current += 1;
+        if (workerCompleteCount.current === workers.current.length) {
+            workerCompleteCount.current = 0;
+            drawFrame();
         }
     }
 
