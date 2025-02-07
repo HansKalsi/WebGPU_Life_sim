@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
 // import { World } from "./components/world/World.tsx";
 import { LifeSim } from "./components/life_sim/LifeSim.tsx";
