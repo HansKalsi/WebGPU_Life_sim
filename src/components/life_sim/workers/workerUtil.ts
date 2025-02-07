@@ -1,4 +1,4 @@
-import { rule } from "../LifeSim.tsx";
+import { Particle, ParticleGroup, Rule, rule } from "../LifeSim.tsx";
 
 export function workerFunction(this: DedicatedWorkerGlobalScope) {
     this.onmessage = function(event: any) {
@@ -18,14 +18,14 @@ export function setupWorker(worker: Worker, completeFunction?: Function) {
 
         if (event.data?.action === "triggerRules") {
             const { width, height, rules, particles } = event.data;
-            let tempNewParticles: any = [];
+            let tempNewParticles: { id: number, new_particles: ParticleGroup }[] = [];
             for (let i = 0; i < rules.length; i++) {
-                const r = rules[i];
-                const pId = r[0];
+                const r: Rule = rules[i];
+                const pId = r.particleGroupOne;
                 // console.log(pId, particles);
-                const particles1 = particles[pId];
-                const particles2 = particles[r[1]];
-                const g = r[2];
+                const particles1: Particle[] = particles[pId].particles;
+                const particles2: Particle[] = particles[r.particleGroupTwo].particles;
+                const g = r.g;
 
                 tempNewParticles.push(rule(pId, width, height, particles1, particles2, g));
             }
