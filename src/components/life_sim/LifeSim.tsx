@@ -1,30 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { setupWorker, workerFunction } from "./workers/workerUtil.ts";
-
-export interface Particle {
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    color: string;
-}
-
-export interface ParticleGroup {
-    particles: Particle[] | null;
-}
-
-export interface Rule {
-    particleGroupOne: number;
-    particleGroupTwo: number;
-    g: number;
-}
-
-export interface WorkerParticleGroup {
-    id: number;
-    // particle_groups: ParticleGroup[];
-    rules: Rule[];
-    worker: Worker;
-}
+import { Particle, ParticleGroup, Rule, WorkerParticleGroup } from "./types/global_types.ts";
 
 export function LifeSim() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -117,19 +92,15 @@ export function LifeSim() {
 
     function setupWorkers() {
         // const WORKER_COUNT = navigator.hardwareConcurrency || 4;
-        const WORKER_COUNT = 8;
+        const WORKER_COUNT = 4;
         console.log(`starting ${WORKER_COUNT} workers`);
         console.log(`could start a maximum of ${navigator.hardwareConcurrency} workers`);
         let tempWorkers: WorkerParticleGroup[] = [];
 
-        const code = workerFunction.toString();
-        const blob = new Blob([`(${code})()`], { type: "application/javascript" });
-        const workerScriptUrl = URL.createObjectURL(blob);
         const amountOfParticleGroupsForWorker = numOfParticleGroups / WORKER_COUNT;
         let initialIndexForPG = 0;
         for (let i = 0; i < WORKER_COUNT; i++) {
-            const newWorker = new Worker(workerScriptUrl);
-            setupWorker(newWorker, workerComplete);
+            const newWorker = new Worker(new URL('./workers/worker.ts', import.meta.url));
             // let tempWorkersPGs = particlesProxy.current.slice(initialIndexForPG, initialIndexForPG + amountOfParticleGroupsForWorker);
             let tempWorkerRules = (rulesProxy.current).filter((rule: Rule) => {
                 if (rule.particleGroupOne >= initialIndexForPG && rule.particleGroupOne < initialIndexForPG + amountOfParticleGroupsForWorker) {
@@ -137,10 +108,19 @@ export function LifeSim() {
                 }
             });
             console.log("worker rules", tempWorkerRules);
+            newWorker.postMessage({ action: "initialise", width, height, rules: tempWorkerRules });
+            // Listen for data requests
+            newWorker.onmessage = (e) => {
+                if (e.data.action === "requestChunk") {
+                    console.log("worker requesting chunk");
+                } else if (e.data.action === "chunkFinished") {
+                    workerComplete(e.data.result);
+                }
+            };
             let workerParticleGroup: WorkerParticleGroup = {
                 id: i,
                 // particle_groups: tempWorkersPGs,
-                rules: tempWorkerRules,
+                // rules: tempWorkerRules,
                 worker: newWorker
             };
             console.log(workerParticleGroup);
@@ -152,15 +132,6 @@ export function LifeSim() {
         workers.current = tempWorkers;
         console.log("workers created:", workers.current);
     }
-
-    // useEffect(() => {
-    //     if (workers.current.length > 0) {
-    //         console.log("workers setup", workers.current);
-    //         // (workers.current).forEach((worker: WorkerParticleGroup) => {
-    //         //     worker.worker.postMessage('from main thread: message to worker');
-    //         // });
-    //     }
-    // }, [workers.current]);
 
     useEffect(() => {
         if (canvasRef.current) {
@@ -192,6 +163,8 @@ export function LifeSim() {
     }
 
     function drawFrame() {
+        // console.timeEnd("drawFrame");
+        // console.time("drawFrame");
         // Reset canvas (so old data is removed and colour bleeding doesn't happen)
         m.clearRect(0,0,width,height);
         // TODO: worker-ise
@@ -215,12 +188,10 @@ export function LifeSim() {
     function triggerRules() {
         for (let workerObj of workers.current) {
             const worker = workerObj.worker;
+            const copyOfAllParticleGroups = JSON.parse(JSON.stringify(particlesProxy.current));
             worker.postMessage({
-                action: "triggerRules",
-                width: width,
-                height: height,
-                rules: workerObj.rules,
-                particles: particlesProxy.current,
+                action: "processChunk",
+                particles: copyOfAllParticleGroups,
             });
         }
     }
@@ -242,42 +213,4 @@ export function LifeSim() {
     return (
         <canvas ref={canvasRef} id={name} width={width} height={height}></canvas>
     )
-}
-
-export function rule(pId: number, width: number, height: number, particles1: Particle[], particles2: Particle[], g: number): {id: number, new_particles: ParticleGroup} {
-    let tempNewParticlesOne: ParticleGroup = { particles: [] };
-    for (let i = 0; i < particles1.length; i++) {
-        let fx = 0;
-        let fy = 0;
-        let a: Particle = particles1[i];
-        let b: Particle;
-        for (let j = 0; j < particles2.length; j++) {
-            b = particles2[j];
-            let dx = a.x-b.x;
-            let dy = a.y-b.y;
-            let d = Math.sqrt(dx*dx+dy*dy);
-            if (d > 0 && d < 80) {
-                let F = g * 1/d;
-                fx += (F*dx);
-                fy += (F*dy);
-            }
-        }
-        a.vx = (a.vx+fx)*0.2;
-        a.vy = (a.vy+fy)*0.2;
-        // If the particle would go off screen, make it's force change negative
-        if ((a.x + a.vx) <= 0 || (a.x + a.vx) >= width) {
-            a.vx *= -1;
-        }
-        if ((a.y + a.vy) <= 0 || (a.y + a.vy) >= height) {
-            a.vy *= -1;
-        }
-        // Apply the force change to the particles position
-        a.x += a.vx;
-        a.y += a.vy;
-        tempNewParticlesOne.particles?.push(a);
-    }
-    return {
-        id: pId,
-        new_particles: tempNewParticlesOne,
-    };
 }
