@@ -19,7 +19,6 @@ document.getElementById('root')!.style.border = "1px solid white";
 root.render(
     <React.StrictMode>
         <LifeSim />
-        {/* <WorkerTest /> */}
     </React.StrictMode>
 );
 
