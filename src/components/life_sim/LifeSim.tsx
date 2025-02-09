@@ -41,7 +41,7 @@ export function LifeSim() {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(10);
+        setNumOfParticleGroups(12);
     }, []);
 
     function randomiseHexColors(numOfColors: number): string[] {
@@ -77,13 +77,13 @@ export function LifeSim() {
         for (let i = 0; i < colors.length; i++) {
             // TODO: Make random again (only fixed for testing consistently)
             // let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
-            let temp_numOfParticles = 500; // Generate a random number between 0 and 200
+            let temp_numOfParticles = 100; // Generate a random number between 0 and 200
             let consumes_id = -1;
             if (Math.random() > 0.6) {
                 consumes_id = Math.floor(Math.random() * numOfParticleGroups);
             }
             let loves_id = Math.floor(Math.random() * numOfParticleGroups);
-            let temp_particleGroup: ParticleGroup = create(temp_numOfParticles, colors[i], consumes_id, loves_id);
+            let temp_particleGroup: ParticleGroup = create(i, temp_numOfParticles, colors[i], consumes_id, loves_id);
             particleGroups.push(temp_particleGroup);
         }
         console.log("particleGroups", particleGroups);
@@ -144,17 +144,17 @@ export function LifeSim() {
     }, [canvasRef]);
 
     function particle(id: number, x: number, y: number, c: string, consumes_id: number, loves_id: number): Particle {
-        return { id: id, x: x, y: y, vx: 0, vy: 0, color: c, energy: ((Math.random() * 100) * numOfParticleGroups), spawned_child: false, consumes_id: consumes_id, loves_id: loves_id };
+        return { id: id, x: x, y: y, vx: 0, vy: 0, color: c, energy: (100 * numOfParticleGroups), spawned_child: false, consumes_id: consumes_id, loves_id: loves_id };
     }
 
     function randomPos(size: number): number {
         return Math.random()*size;
     }
     
-    function create(number:any, color:any, consumes_id: number, loves_id: number): ParticleGroup {
+    function create(group_id: number, number:any, color:any, consumes_id: number, loves_id: number): ParticleGroup {
         let group: ParticleGroup = { particles: [] };
         for (let i = 0; i < number; i++) {
-            (group.particles).push(particle(i, randomPos(width), randomPos(height), color, consumes_id, loves_id));
+            (group.particles).push(particle(group_id, randomPos(width), randomPos(height), color, consumes_id, loves_id));
         }
         return group;
     }
