@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Particle, ParticleGroup, Rule, WorkerParticleGroup } from "./types/global_types.ts";
+import { Particle, ParticleGroup, Rule, RuleChunk, WorkerParticleGroup } from "./types/global_types.ts";
 
 export function LifeSim() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,7 +17,8 @@ export function LifeSim() {
     const workers = useRef<WorkerParticleGroup[]>([]);
 
     // Tracker variables
-    const workerCompleteCount = useRef<number>(0);
+    const ruleChunks = useRef<RuleChunk[]>([]);
+    const particleGroupIdsBeingWorkedOn = useRef<number[]>([]);
 
     function randomiseRules(): Rule[] {
         let rules: Rule[] = [];
@@ -40,7 +41,7 @@ export function LifeSim() {
     }
 
     useEffect(() => {
-        setNumOfParticleGroups(16); // only use multiples of 4 since they are being split evenly amongst 4 workers - FIXME: make this not a requirement
+        setNumOfParticleGroups(10);
     }, []);
 
     function randomiseHexColors(numOfColors: number): string[] {
@@ -77,7 +78,12 @@ export function LifeSim() {
             // TODO: Make random again (only fixed for testing consistently)
             // let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
             let temp_numOfParticles = 500; // Generate a random number between 0 and 200
-            let temp_particleGroup: ParticleGroup = create(temp_numOfParticles, colors[i]);
+            let consumes_id = -1;
+            if (Math.random() > 0.6) {
+                consumes_id = Math.floor(Math.random() * numOfParticleGroups);
+            }
+            let loves_id = Math.floor(Math.random() * numOfParticleGroups);
+            let temp_particleGroup: ParticleGroup = create(temp_numOfParticles, colors[i], consumes_id, loves_id);
             particleGroups.push(temp_particleGroup);
         }
         console.log("particleGroups", particleGroups);
@@ -92,7 +98,7 @@ export function LifeSim() {
 
     function setupWorkers() {
         // const WORKER_COUNT = navigator.hardwareConcurrency || 4;
-        const WORKER_COUNT = 4;
+        const WORKER_COUNT = 8;
         console.log(`starting ${WORKER_COUNT} workers`);
         console.log(`could start a maximum of ${navigator.hardwareConcurrency} workers`);
         let tempWorkers: WorkerParticleGroup[] = [];
@@ -102,17 +108,12 @@ export function LifeSim() {
         for (let i = 0; i < WORKER_COUNT; i++) {
             const newWorker = new Worker(new URL('./workers/worker.ts', import.meta.url));
             // let tempWorkersPGs = particlesProxy.current.slice(initialIndexForPG, initialIndexForPG + amountOfParticleGroupsForWorker);
-            let tempWorkerRules = (rulesProxy.current).filter((rule: Rule) => {
-                if (rule.particleGroupOne >= initialIndexForPG && rule.particleGroupOne < initialIndexForPG + amountOfParticleGroupsForWorker) {
-                    return rule;
-                }
-            });
-            console.log("worker rules", tempWorkerRules);
-            newWorker.postMessage({ action: "initialise", width, height, rules: tempWorkerRules });
+            // console.log("worker rules", tempWorkerRules);
             // Listen for data requests
             newWorker.onmessage = (e) => {
                 if (e.data.action === "requestChunk") {
-                    console.log("worker requesting chunk");
+                    // console.log("worker requesting chunk");
+                    passNextRuleChunk(newWorker);
                 } else if (e.data.action === "chunkFinished") {
                     workerComplete(e.data.result);
                 }
@@ -124,6 +125,7 @@ export function LifeSim() {
                 worker: newWorker
             };
             console.log(workerParticleGroup);
+            workerParticleGroup.worker.postMessage({ action: "initialise", width, height });
             tempWorkers.push(workerParticleGroup);
             console.log(tempWorkers);
             initialIndexForPG += amountOfParticleGroupsForWorker;
@@ -141,18 +143,18 @@ export function LifeSim() {
         }
     }, [canvasRef]);
 
-    function particle(x:any, y:any, c:any): Particle {
-        return {"x":x,"y":y, "vx":0, "vy":0, "color":c};
+    function particle(id: number, x: number, y: number, c: string, consumes_id: number, loves_id: number): Particle {
+        return { id: id, x: x, y: y, vx: 0, vy: 0, color: c, energy: ((Math.random() * 100) * numOfParticleGroups), spawned_child: false, consumes_id: consumes_id, loves_id: loves_id };
     }
-    
+
     function randomPos(size: number): number {
         return Math.random()*size;
     }
     
-    function create(number:any, color:any): ParticleGroup {
+    function create(number:any, color:any, consumes_id: number, loves_id: number): ParticleGroup {
         let group: ParticleGroup = { particles: [] };
         for (let i = 0; i < number; i++) {
-            (group.particles!).push(particle(randomPos(width), randomPos(height), color));
+            (group.particles).push(particle(i, randomPos(width), randomPos(height), color, consumes_id, loves_id));
         }
         return group;
     }
@@ -165,6 +167,7 @@ export function LifeSim() {
     function drawFrame() {
         // console.timeEnd("drawFrame");
         // console.time("drawFrame");
+        console.log("drawing frame, total particles: ", particlesProxy.current.reduce((acc, group) => acc + group.particles!.length, 0));
         // Reset canvas (so old data is removed and colour bleeding doesn't happen)
         m.clearRect(0,0,width,height);
         // TODO: worker-ise
@@ -182,32 +185,82 @@ export function LifeSim() {
     }
 
     function update() {
+        setupNextFrameRuleChunks();
         triggerRules();
+        resetParticleAttributes();
+    }
+
+    function resetParticleAttributes() {
+        for (let proxy of particlesProxy.current) {
+            for (let particle of proxy.particles) {
+                particle.spawned_child = false;
+            }
+        }
     }
 
     function triggerRules() {
         for (let workerObj of workers.current) {
-            const worker = workerObj.worker;
-            const copyOfAllParticleGroups = JSON.parse(JSON.stringify(particlesProxy.current));
-            worker.postMessage({
-                action: "processChunk",
-                particles: copyOfAllParticleGroups,
-            });
+            passNextRuleChunk(workerObj.worker);
         }
     }
 
     function workerComplete(data: any) {
         // TODO: Somehow when the worker finishes, detect which particle groups it updated and replace the data with the new data
         if (particlesProxy.current.length > 0) {
-            for (const updateData of data) {
-                particlesProxy.current[updateData.id].particles = updateData.new_particles.particles;
-            }
+            particlesProxy.current[data.id].particles = data.new_particles.particles;
+            particleGroupIdsBeingWorkedOn.current = particleGroupIdsBeingWorkedOn.current.filter((id) => id !== data.id && id !== data.o_id);
         }
-        workerCompleteCount.current += 1;
-        if (workerCompleteCount.current === workers.current.length) {
-            workerCompleteCount.current = 0;
+        if (ruleChunks.current.length === 0) {
+            // console.log("frame drawn");
             drawFrame();
         }
+    }
+
+    function setupNextFrameRuleChunks() {
+        for (const rule of rulesProxy.current) {
+            const ruleChunk: RuleChunk = {
+                rule: rule,
+            }
+            ruleChunks.current.push(ruleChunk);
+        }
+    }
+
+    function passNextRuleChunk(worker: Worker) {
+        // console.log("passing next rule chunk of chunks", ruleChunks.current.length);
+        if (ruleChunks.current.length > 0) {
+            let nextIndexToProcess = findNextUnworkedParticleGroupRule(ruleChunks.current.length - 1);
+            if (nextIndexToProcess >= 0) {
+                const ruleChunk = ruleChunks.current[nextIndexToProcess];
+                ruleChunks.current.splice(nextIndexToProcess, 1);
+                const rule = ruleChunk.rule;
+                worker.postMessage({
+                    action: "processChunk",
+                    changed_id: rule.particleGroupOne,
+                    affecting_id: rule.particleGroupTwo,
+                    g: rule.g,
+                    particle_group_one: particlesProxy.current[rule.particleGroupOne],
+                    particle_group_two: particlesProxy.current[rule.particleGroupTwo],
+                });
+            } else {
+                worker.postMessage({ action: "noChunkReady" });
+            }
+        } else {
+            // TODO: Terminate worker (since no more work to do)
+        }
+    }
+
+    function findNextUnworkedParticleGroupRule(checkNext: number): number {
+        if (checkNext < 0) {
+            return -1;
+        }
+        let checkIds = ruleChunks.current[checkNext].rule;
+        if (particleGroupIdsBeingWorkedOn.current.includes(checkIds.particleGroupOne) || particleGroupIdsBeingWorkedOn.current.includes(checkIds.particleGroupTwo)) {
+            return findNextUnworkedParticleGroupRule(checkNext - 1);
+        }
+        particleGroupIdsBeingWorkedOn.current.push(checkIds.particleGroupOne);
+        particleGroupIdsBeingWorkedOn.current.push(checkIds.particleGroupTwo);
+        return checkNext;
+
     }
 
     return (
