@@ -79,6 +79,7 @@ export function LifeSim() {
             // let temp_numOfParticles = Math.floor(Math.random() * 1001); // Generate a random number between 0 and 200
             let temp_numOfParticles = 100; // Generate a random number between 0 and 200
             let consumes_id = -1;
+            // FIXME: Particle groups should not consume nor love themselves (to foster diverse organisms)
             if (Math.random() > 0.6) {
                 consumes_id = Math.floor(Math.random() * numOfParticleGroups);
             }
